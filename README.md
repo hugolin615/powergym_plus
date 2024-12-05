@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # volt_var
 PowerGym +
 
@@ -155,3 +156,6 @@ Output:
 
 This integrated approach ensures that both feature extraction and Q-value computation are handled within a single network, streamlining the architecture and making it more efficient for DQN.
 
+=======
+# powergym_plus
+>>>>>>> 15c0f4f5a02f52f28134ffa6973c79ab32b30c05
