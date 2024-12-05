@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# volt_var
-PowerGym +
-
 # What is PowerGym +
 It is a gym environment for Volt-Var control in power distribution systems. The Volt-Var control targets minimizing voltage violations, control loss, and power loss under physical networked constraints and device constraints. The networked constraints are maintained by the power distribution system simulator, OpenDSS. The device constraints are usually integer constraints on the actions.
 
@@ -122,7 +118,7 @@ The models are saved directly in `saved_models`.
 The name of the model is of the format `name = f"{args.env_name}_{args.policy}_ts_{args.total_training_step}_bs_{args.buffer_size}_ls_{args.learning_starts}"`
 The tensorboad file is saved in `data\dqn_tensorboard`
 
-To view the reward in tensorboard after executing a script `tenosrborad --logdir Path_to_dqn_tensorboard`
+To view the reward in tensorboard after executing a script `tensorborad --logdir Path_to_dqn_tensorboard`
 For example my path is `tensorboard --logdir C:\Users\Romesh\Desktop\volt_var\volt_var\data\dqn_tensorboard`
 
 # Testing
@@ -156,6 +152,3 @@ Output:
 
 This integrated approach ensures that both feature extraction and Q-value computation are handled within a single network, streamlining the architecture and making it more efficient for DQN.
 
-=======
-# powergym_plus
->>>>>>> 15c0f4f5a02f52f28134ffa6973c79ab32b30c05
