@@ -2,11 +2,9 @@
 PowerGym+ is a gym environment for Volt-Var control in power distribution systems. The Volt-Var control aims to minimize voltage violations, control losses, and power losses under physical networked constraints and device constraints. The networked constraints are maintained by the power distribution system simulator, OpenDSS, while device constraints typically involve integer constraints on actions.
 
 # How is it different than Siemens/PowerGym
-1. Compatibility: It is fully compatible with Gymnasium, the current standard for reinforcement learning gym environments.
-2. Graph-Based Observations: Observations can be wrapped as a graph, enabling advanced processing.
-3. Inductive Learning Support: Designed to support inductive learning.
-
-
+1. **Compatibility:** It is fully compatible with Gymnasium, the current standard for reinforcement learning gym environments.
+2. **Graph-Based Observations:** Observations can be wrapped as a graph, enabling advanced processing.
+3. **Inductive Learning Support:** Designed to support inductive learning.
 
 ## Requirements
 ------------
