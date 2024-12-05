@@ -102,17 +102,17 @@ To run a DQN run the following code
 python training\dqn.py --policy --env_name --total_training_step --buffer_size --learning_starts --action_type --obs_type --load_profile_id
 ```
 
-|**Argument Parser** | |
-| ------------- | ------------- | ------------- |
-| **Argument**| **Default**| **Range**|
-| policy     | MLP | MLP, GNN_FE, GNN_Policy |
-| env_name     | 13Bus | 13Bus, 34Bus, 123Bus, 8500-Node |
-| total_training_step    |1e5 | [1 - Any larger number] |
-| buffer_size     | 1e4 | [1 - Any larger number] Note: Make sure it is less than training steps |
-| learning_starts    | 1e3 |[1 - Any larger number] Note: Make sure it is less than training steps|
-| action_type     | Reduced | Reduced, Original |
-| obs_type     | graph | graph, non_graph |
-| load_profile_id     | 0 |13bus: [0,72], 34bus: [0,15], 123Bus: [0,15] |
+| **Argument**          | **Default**   | **Range**                       |
+|------------------------|---------------|----------------------------------|
+| policy                | MLP           | MLP, GNN_FE, GNN_Policy         |
+| env_name              | 13Bus         | 13Bus, 34Bus, 123Bus, 8500-Node |
+| total_training_step   | 1e5           | [1 - Any larger number]         |
+| buffer_size           | 1e4           | [1 - Any larger number] Note: Make sure it is less than training steps |
+| learning_starts       | 1e3           | [1 - Any larger number] Note: Make sure it is less than training steps |
+| action_type           | Reduced       | Reduced, Original               |
+| obs_type              | graph         | graph, non_graph                |
+| load_profile_id       | 0             | 13bus: [0,72], 34bus: [0,15], 123Bus: [0,15] |
+
 
 
 Example with `GNN_FE` and `34_Bus`
