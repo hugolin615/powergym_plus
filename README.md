@@ -103,7 +103,7 @@ python training\dqn.py --policy --env_name --total_training_step --buffer_size -
 ```
 
 |**Argument Parser** | |
-| ------------- | ------------- |
+| ------------- | ------------- | ------------- |
 | **Argument**| **Default**| **Range**|
 | policy     | MLP | MLP, GNN_FE, GNN_Policy |
 | env_name     | 13Bus | 13Bus, 34Bus, 123Bus, 8500-Node |
