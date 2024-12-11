@@ -172,18 +172,18 @@ if __name__ == "__main__":
         data = episode_reward
     elif args.test == "all_load_profile":
         if args.env_name == "13Bus":
-            load_profile = 72
+            load_profile = 5
         elif args.env_name == "34Bus":
-            load_profile = 15
+            load_profile = 5
         elif args.env_name == "123Bus":
             load_profile = 15
         data = np.zeros((load_profile,num_episode))    
         for i in range(0, load_profile):
-            env = make_env(args.env_name, profile_id=args.load_profile_id, action_type=args.action_type, obs_type=args.obs_type, worker_idx = args.worker_idx )
+            env = make_env(args.env_name, profile_id = i, action_type=args.action_type, obs_type=args.obs_type, worker_idx = args.worker_idx )
             episode_reward = test_agent(env, args, saved_model_name)
             data[i] = episode_reward
     end_time = time.time()
-    file_name = f"reward_e_{args.env_name}"
+    file_name = f"reward_train_34_test_{args.env_name}"
     cwd = os.getcwd()
     print(cwd)
     parent_directory = os.path.abspath(os.path.join(cwd, "..", ".."))
