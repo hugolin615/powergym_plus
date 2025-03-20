@@ -70,6 +70,7 @@ def run_random_agent(args, load_profile_idx=0, worker_idx=None, use_plot=False, 
         print(f"for i: {i} {'-'*80}")
         dis_action = env.random_action()
         obs, r, done, trunacted, info = env.step(dis_action)
+        print("action:", dis_action, "obs: ", obs, "rewards", r)
         episode_reward += r
         reward.append(r)
         print(f'load_profile: {load_profile_idx}, episode_reward: {r}')
