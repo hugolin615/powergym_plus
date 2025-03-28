@@ -4,8 +4,8 @@
 import os
 import gymnasium as gym
 import numpy as np
-from core_open_dss.circuit import Circuits
-from core_open_dss.loadprofile import LoadProfile
+from env.circuit import Circuits
+from env.loadprofile import LoadProfile
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -15,8 +15,8 @@ from gymnasium.spaces import Graph, Box, Discrete
 
 #this is our new imports
 from env.action import ActionSpace
-from env.reward import MyReward
-from env.obs import Observation
+# from env.reward import MyReward
+# from env.obs import Observation
 #### helper functions ####
             
 
@@ -68,7 +68,8 @@ class volt_var(gym.Env):
         lines (dict): Dict of edges with components in circuit
         transformers (dict): Dictionary of transformers in system
     """
-    def __init__(self, folder_path, profile_id ,action_type, obs_type, info, dss_act=False):
+    # def __init__(self, folder_path, profile_id ,action_type, obs_type, info, dss_act=False):
+    def __init__(self, folder_path, info, dss_act=False):
         super().__init__()
         self.obs = dict()
         """
@@ -92,10 +93,10 @@ class volt_var(gym.Env):
         self.show_node_labels = info['show_node_labels']
         self.scale = info['scale'] if 'scale' in info else 1.0
         self.wrap_observation = True
-        self.observe_load = False
-        self.action_type = action_type
-        self.obs_type = obs_type
-        self.profile_id = profile_id
+        self.observe_load = True
+        #self.action_type = action_type
+        #self.obs_type = obs_type
+        #self.profile_id = profile_id
 
         # generate load profile files
         self.load_profile = LoadProfile(\
@@ -106,7 +107,9 @@ class volt_var(gym.Env):
 
         self.num_profiles = self.load_profile.gen_loadprofile(scale=self.scale) #73 for 13 bus
         # choose a dummy load profile for the initialization of the circuit
-        self.load_profile.choose_loadprofile(self.profile_id)
+        # self.load_profile.choose_loadprofile(self.profile_id)
+        self.load_profile.choose_loadprofile(0)
+        print('number of profiles: ', self.num_profiles)
         
         # problem horizon is the length of load profile
         self.horizon = info['max_episode_steps']
@@ -131,25 +134,29 @@ class volt_var(gym.Env):
         #self.topology = self.build_graph()
         self.t = 0
 
-        self.reward_func = MyReward(volt_var, info, self.obs, self.t, self.horizon)
-        #self.reward_func = self.MyReward(self, info)
+        #self.reward_func = MyReward(volt_var, info, self.obs, self.t, self.horizon)
+        self.reward_func = self.MyReward(self, info)
         
         
         # create action space and observation space
         self.ActionSpace = ActionSpace( (self.cap_num, self.reg_num, self.bat_num),
-                                        (self.reg_act_num, self.bat_act_num), self.action_type )
+                                        (self.reg_act_num, self.bat_act_num) )
         print(f"self.cap_num:{self.cap_num}, self.reg_num:{self.reg_num}, self.bat_num:{self.bat_num}, self.reg_act_num: {self.reg_act_num}, self.bat_act_num:{self.bat_act_num}")
         self.action_space = self.ActionSpace.space
-        observation, _ = self.reset()
+        
+        # HL: ignore the wrap_observation at this moment, using the dict types for experiments first
+        #      need to determine appropriate way of wrapping observation
+        self.reset()
+        
         #print(f"This is in init, {observation}, {_}")
-        nodes, edges, lines, transformer = self.build_edges()
-        obs = Observation((self.cap_num, self.reg_num, self.bat_num, self.reg_act_num, self.bat_act_num), self.wrap_observation, self.observe_load, observation, self.obs)
-        if self.obs_type == "non_graph":
-            self.observation_space = obs.processflatdata()
-        elif self.obs_type == "graph":
-            self.observation_space = obs.processgraphdata(nodes, edges)
+        # nodes, edges, lines, transformer = self.build_edges()
+        #obs = Observation((self.cap_num, self.reg_num, self.bat_num, self.reg_act_num, self.bat_act_num), self.wrap_observation, self.observe_load, observation, self.obs)
+        # if self.obs_type == "non_graph":
+        #    self.observation_space = obs.processflatdata()
+        #elif self.obs_type == "graph":
+        #    self.observation_space = obs.processgraphdata(nodes, edges)
     
-    def step(self, dis_action):
+    def step(self, action):
         """Steps through one step of enviroment and calls DSS solver after one control action
         
         Args:
@@ -162,12 +169,12 @@ class volt_var(gym.Env):
         action_idx = 0
         self.str_action = '' # the action string to be printed at self.plot_graph()
         
-        if self.action_type == "Reduced":
-            act = self.ActionSpace
-            action = act.decode_action(dis_action)
-            print(f"Dis_action: {dis_action} and multi_dis action:{action}")
-        elif self.action_type == "Original":
-            action = dis_action        
+        # if self.action_type == "Reduced":
+        #    act = self.ActionSpace
+        #    action = act.decode_action(dis_action)
+        #    print(f"Dis_action: {dis_action} and multi_dis action:{action}")
+        #elif self.action_type == "Original":
+        #    action = dis_action        
 
         ### capacitor control
         print(f"This is the selected action: {action}")
@@ -181,12 +188,12 @@ class volt_var(gym.Env):
         else: capdiff, cap_statuses = [], dict()
 
         if self.reg_num>0:
-            #tapnums = action[action_idx:action_idx+self.reg_num]
-            if self.action_type == "Original":
-                tapnums = action[action_idx:action_idx+self.reg_num]
-            elif self.action_type == "Reduced":
-                tapnums = [action[action_idx]] * self.reg_num
-                print(f"This is tapnums: {tapnums}")
+            tapnums = action[action_idx:action_idx+self.reg_num]
+            #if self.action_type == "Original":
+            #    tapnums = action[action_idx:action_idx+self.reg_num]
+            #elif self.action_type == "Reduced":
+            #    tapnums = [action[action_idx]] * self.reg_num
+            #    print(f"This is tapnums: {tapnums}")
             regdiff = self.circuit.set_all_regulator_tappings(tapnums)
             reg_statuses = {reg:self.circuit.regulators[reg].tap \
                             for reg in self.reg_names}
@@ -196,14 +203,12 @@ class volt_var(gym.Env):
 
         ### battery control
         if self.bat_num>0:
-            states = [action[-1]]*self.bat_num
-            #states = action[action_idx:]
+            #states = [action[-1]]*self.bat_num
+            states = action[action_idx:]
             self.circuit.set_all_batteries_before_solve(states)
             self.str_action += 'Bat Status:'+str(states)
         
-
         self.circuit.dss.ActiveCircuit.Solution.Solve()
-
 
         ### update battery kWh. record soc_err and discharge_err
         if self.bat_num>0:
@@ -231,7 +236,7 @@ class volt_var(gym.Env):
 
         done = (self.t >= self.horizon)
     
-    # Determine if the episode is truncated
+        # Determine if the episode is truncated
         truncated = False  # Update this based on your specific condition for truncation
 
         reward, info = self.reward_func.composite_reward(capdiff, regdiff,\
@@ -246,18 +251,21 @@ class volt_var(gym.Env):
         
         #print(f"observation_prior_wrap_in_step: {self.obs}")
         if self.wrap_observation:
-            if self.obs_type == "non_graph":
-                observation = self.flat_wrap_obs(self.obs)
-            elif self.obs_type == "graph":
-                observation = self.graph_wrap_obs(self.obs)
+            return self.wrap_obs(self.obs), reward, done, truncated, info
+            #if self.obs_type == "non_graph":
+            #    observation = self.flat_wrap_obs(self.obs)
+            #elif self.obs_type == "graph":
+            #    observation = self.graph_wrap_obs(self.obs)
         else:
-            observation = self.obs
+            #observation = self.obs
+            return self.obs, reward, done, truncated, info
         
         #print(f"observation_after_wrap_in_step: {observation}")
         
-        return observation, reward, done, truncated, info
+        #return observation, reward, done, truncated, info
 
-    def reset(self, seed = None): # put seed = None so that it is compatible with openAI gymnasium env
+    #def reset(self, seed = None): # put seed = None so that it is compatible with openAI gymnasium env
+    def reset(self, load_profile_idx = 0): # put seed = None so that it is compatible with openAI gymnasium env
         """
         Reset state of enviroment for new episode
         
@@ -271,10 +279,12 @@ class volt_var(gym.Env):
         self.t = 0
  
         ### choose load profile
-        self.load_profile.choose_loadprofile(self.profile_id)
-        self.all_load_profiles = self.load_profile.get_loadprofile(self.profile_id)
+        self.load_profile.choose_loadprofile(load_profile_idx)
+        # self.all_load_profiles = self.load_profile.get_loadprofile(self.profile_id)
+        self.all_load_profiles = self.load_profile.get_loadprofile(load_profile_idx)
+        print('what is all_load_profiles: ', self.all_load_profiles)
 
-        print(f"This is the profile: {self.profile_id}")
+        print(f"This is the profile: {load_profile_idx}")
         
         ### re-compile dss and reset batteries
         self.circuit.reset()
@@ -314,16 +324,18 @@ class volt_var(gym.Env):
         #print(f"observation_prior_to_wrap_in_reset: {self.obs}")
 
         if self.wrap_observation:
-            if self.obs_type == "non_graph":
-                observation = self.flat_wrap_obs(self.obs)
-            elif self.obs_type == "graph":
-                observation = self.graph_wrap_obs(self.obs)
+            #if self.obs_type == "non_graph":
+            #    observation = self.flat_wrap_obs(self.obs)
+            #elif self.obs_type == "graph":
+            #    observation = self.graph_wrap_obs(self.obs)
+            return self.wrap_obs(self.obs)
         else:
-            observation = self.obs
+            #observation = self.obs
+            return self.obs
 
         #print(f"observation_after_wrap_in_reset: {observation}")
 
-        return observation, {} #reset requires tuple of observation and info or etc.
+        # return observation, {} #reset requires tuple of observation and info or etc.
 
     def build_edges(self):
         
@@ -382,6 +394,32 @@ class volt_var(gym.Env):
         assert edge_index.size(0) == 2, f"Edge index should have shape [2, num_edges], got {edge_index.shape}"
         
         return edge_index.contiguous()
+
+    def wrap_obs(self, obs):
+        """ Wrap the observation dictionary (i.e., self.obs) to a numpy array
+        
+        Attribute:
+            obs: the observation distionary generated at self.reset() and self.step()
+        
+        Return:
+            a numpy array of observation.
+        
+        """
+        key_obs = ['bus_voltages', 'cap_statuses', 'reg_statuses', 'bat_statuses']
+        if self.observe_load: key_obs.append('load_profile_t')
+
+        mod_obs = []
+        for var_dict in key_obs:
+            # node voltage is a dict of dict, we only take minimum phase node voltage
+            #if var_dict == 'bus_voltages': 
+            #    for values in obs[var_dict].values():
+            #        mod_obs.append(min(values))
+            if var_dict in \
+                ['bus_voltages','cap_statuses','reg_statuses', 'bat_statuses', 'load_profile_t']:
+                mod_obs = mod_obs + list(obs[var_dict].values())
+            elif var_dict == 'power_loss':
+                mod_obs.append(obs['power_loss'])
+        return np.hstack(mod_obs)
 
     def graph_wrap_obs(self, obs):
         """ Wrap the observation dictionary (i.e., self.obs) to a gym graph space
@@ -496,6 +534,9 @@ class volt_var(gym.Env):
                 mod_obs.append(obs['power_loss'])
         return np.hstack(mod_obs)
 
+    def seed(self, seed):
+        self.ActionSpace.seed(seed)
+
     def random_action(self):
         """Samples random action
         
@@ -504,3 +545,61 @@ class volt_var(gym.Env):
         """
         return self.ActionSpace.sample()
 
+    class MyReward:
+        """Reward definition class
+        
+        Attributes:
+            env (obj): Inherits all attributes of environment 
+        """
+        def __init__(self, env, info):
+            self.env = env
+            self.power_w = info['power_w']
+            self.cap_w = info['cap_w']
+            self.reg_w = info['reg_w']
+            self.soc_w = info['soc_w']
+            self.dis_w = info['dis_w']
+
+        def powerloss_reward(self):
+            # Penalty for power loss of entire system at one time step
+            #loss = self.env.circuit.total_loss()[0] # a postivie float
+            #gen = self.env.circuit.total_power()[0] # a negative float
+            ratio = max(0.0, min(1.0, self.env.obs['power_loss']))
+            return -ratio * self.power_w
+
+        def ctrl_reward(self, capdiff, regdiff, soc_err, discharge_err):
+            # penalty of actions
+            ## capdiff: abs(current_cap_state - new_cap_state)
+            ## regdiff: abs(current_reg_tap_num - new_reg_tap_num)
+            ## soc_err: abs(soc - initial_soc)
+            ## discharge_err: max(0, kw) / max_kw
+            ### discharge_err > 0 means discharging
+            cost =  self.cap_w * sum(capdiff) + \
+                    self.reg_w * sum(regdiff) + \
+                    (0.0 if self.env.t != self.env.horizon else self.soc_w * sum(soc_err)) + \
+                    self.dis_w * sum(discharge_err)
+            return -cost
+
+        def voltage_reward(self, record_node = False):
+            # Penalty for node voltage being out of [0.95, 1.05] range
+            violated_nodes = []
+            total_violation = 0
+            for name, voltages in self.env.obs['bus_voltages'].items():
+                max_penalty = min(0, 1.05 - max(voltages)) #penalty is negative if above max
+                min_penalty = min(0, min(voltages) - 0.95) #penalty is negative if below min
+                total_violation += (max_penalty + min_penalty)
+                if record_node and (max_penalty != 0 or min_penalty != 0):
+                    violated_nodes.append(name)
+            return total_violation, violated_nodes
+        
+        def composite_reward(self, cd, rd, soc, dis, full=True, record_node=False):
+            # the main reward function
+            p = self.powerloss_reward()
+            v, vio_nodes = self.voltage_reward(record_node)
+            t = self.ctrl_reward(cd, rd, soc, dis)
+            summ = p + v + t
+            
+            info = dict() if not record_node else {'violated_nodes': vio_nodes}
+            if full: info.update( {'power_loss_ratio':-p/self.power_w, 
+                                    'vol_reward':v, 'ctrl_reward':t} )
+            
+            return summ, info

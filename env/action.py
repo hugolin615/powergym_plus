@@ -17,12 +17,11 @@ class ActionSpace:
         Reduced : Action space include num_cap*2, 1_reg*33, 1_bat*33 
         The reduced action space allows earlier convergence
     '''
-    def __init__(self, CRB_num, RB_act_num, action_type):
+    def __init__(self, CRB_num, RB_act_num):
         self.cap_num, self.reg_num, self.bat_num = CRB_num
         self.reg_act_num, self.bat_act_num = RB_act_num
-        self.action_type = action_type
 
-        if action_type == "Original":
+        if self.bat_act_num < float('inf'):
             cap_actions = [2]* self.cap_num
             reg_actions = [self.reg_act_num]*self.reg_num
             bat_actions = [self.bat_act_num]*self.bat_num
@@ -30,13 +29,12 @@ class ActionSpace:
             self.space = gym.spaces.MultiDiscrete(self.dimension)
             print(f"This is action {self.space}")                
         
-        elif action_type == "Reduced":
-            self.reduced_reg_num = 1
-            self.reduced_bat_num = 1
-            self.dimension = [2] * self.cap_num + [33] * self.reduced_reg_num + [33] * self.reduced_bat_num
-            self.space = gym.spaces.Discrete(np.prod(self.dimension))
-
-
+        else:
+            self.space = gym.spaces.Tuple((\
+               gym.spaces.MultiDiscrete([2]*self.cap_num + [self.reg_act_num]*self.reg_num),\
+               gym.spaces.Box(low=-1, high=1, shape=(self.bat_num,)) ))
+    
+    #  TODO: put these functions with wrap_action
     def encode_action(self,multi_discrete_action):
         """
         Encodes a MultiDiscrete action to a single discrete action index.
@@ -49,6 +47,7 @@ class ActionSpace:
             #print(f"for i {i} the index: {index}, base: {base}")
         return index
     
+    #  TODO: put these functions with wrap_action
     def decode_action(self,discrete_action):
         """
         Decodes a single discrete action index to a MultiDiscrete action.
@@ -60,15 +59,14 @@ class ActionSpace:
             #print(f"for dim : {dim}, multi_discrete_action: {multi_discrete_action} is and discrete_action : {discrete_action}")
         return list(reversed(multi_discrete_action))
     
+    def seed(self, seed):
+        self.space.seed(seed)
+     
     def sample(self):
-        if self.action_type == "Original":
-            ss = self.space.sample()
-            if self.bat_act_num == np.inf:
-                return np.concatenate(ss)
-            return ss
-        elif self.action_type == "Reduced":
-            ss = self.space.sample()
-            return ss
+        ss = self.space.sample()
+        if self.bat_act_num == np.inf:
+            return np.concatenate(ss)
+        return ss
         
     def dim(self):
         if self.bat_act_num == np.inf:

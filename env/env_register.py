@@ -4,7 +4,7 @@
 import os
 import inspect
 import re
-from env.agent_env import volt_var
+from env.env import volt_var
 
 # map from system_name to fixed information of the system
 
@@ -294,11 +294,12 @@ def get_info_and_folder(env_name):
     print(folder_path)
     return base_info, folder_path
 
-def make_env(env_name, profile_id, action_type, obs_type, dss_act=False, worker_idx=None):
+# def make_env(env_name, profile_id, action_type, obs_type, dss_act=False, worker_idx=None):
+def make_env(env_name, dss_act=False, worker_idx=None):
     base_info, folder_path = get_info_and_folder(env_name)
 
     if worker_idx is None:
-        return volt_var(folder_path, profile_id, action_type, obs_type, base_info, dss_act)
+        return volt_var(folder_path, base_info, dss_act)
     else:
         base_file = os.path.join(folder_path, base_info['system_name'], base_info['dss_file'])
         assert os.path.exists(base_file), base_file + ' does not exist'
@@ -313,7 +314,7 @@ def make_env(env_name, profile_id, action_type, obs_type, dss_act=False, worker_
         info = base_info.copy()
         info['dss_file'] = info['dss_file'][:-4] + '_' + str(worker_idx) + '.dss'
         info['worker_idx'] = worker_idx
-        return volt_var(folder_path,profile_id, action_type, obs_type, info, dss_act)
+        return volt_var(folder_path, info, dss_act)
         
 def remove_parallel_dss(env_name, num_workers):
     base_info, folder_path = get_info_and_folder(env_name)

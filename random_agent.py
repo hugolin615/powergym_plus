@@ -6,8 +6,8 @@
 import numpy as np
 import dss as opendss
 import glob
-from core_open_dss.env_register import make_env
-from env.agent_env import ActionSpace
+from env.env_register import make_env
+from env.env import ActionSpace
 import argparse
 import random
 import itertools
@@ -49,8 +49,8 @@ def run_random_agent(args, load_profile_idx=0, worker_idx=None, use_plot=False, 
     cwd = os.getcwd()
     
     # get environment
-    env= make_env(args.env_name, profile_id= load_profile_idx, action_type= "Reduced", obs_type="graph", worker_idx=worker_idx)
-    #env.seed(args.seed + 0 if worker_idx is None else worker_idx) #123456
+    env= make_env(args.env_name, worker_idx=worker_idx)
+    env.seed(args.seed + 0 if worker_idx is None else worker_idx) #123456
     print(env)
 
     if print_step:
@@ -59,11 +59,12 @@ def run_random_agent(args, load_profile_idx=0, worker_idx=None, use_plot=False, 
         print('-'*80)
 
     
-    obs = env.reset()
-    reward = []
+    obs = env.reset(load_profile_idx = load_profile_idx)
+    # reward = []
 
     episode_reward = 0.0
-    episode_length = 24
+    episode_length = env.horizon
+    # episode_length = 24
 
     #for j in range(epsidoe_len):
     for i in range(episode_length):
@@ -72,10 +73,9 @@ def run_random_agent(args, load_profile_idx=0, worker_idx=None, use_plot=False, 
         obs, r, done, trunacted, info = env.step(dis_action)
         print("action:", dis_action, "obs: ", obs, "rewards", r)
         episode_reward += r
-        reward.append(r)
-        print(f'load_profile: {load_profile_idx}, episode_reward: {r}')
-        break
-    print(reward)
+        # reward.append(r)
+    
+    # print(f'load_profile: {load_profile_idx}, episode_reward: {r}')
 
 if __name__ == '__main__':
     print('DSS-python version:', opendss.__version__)
