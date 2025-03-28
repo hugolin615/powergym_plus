@@ -4,8 +4,8 @@
 import os
 import gymnasium as gym
 import numpy as np
-from env.circuit import Circuits
-from env.loadprofile import LoadProfile
+from powergym_plus.env.circuit import Circuits
+from powergym_plus.env.loadprofile import LoadProfile
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -14,12 +14,10 @@ from torch_geometric.data import Data
 from gymnasium.spaces import Graph, Box, Discrete
 
 #this is our new imports
-from env.action import ActionSpace
+from powergym_plus.env.action import ActionSpace
 # from env.reward import MyReward
 # from env.obs import Observation
 #### helper functions ####
-            
-
 
 #### environment class ####
 class volt_var(gym.Env):
@@ -146,7 +144,8 @@ class volt_var(gym.Env):
         
         # HL: ignore the wrap_observation at this moment, using the dict types for experiments first
         #      need to determine appropriate way of wrapping observation
-        self.reset()
+        # self.reset()
+        self.reset_obs_space()
         
         #print(f"This is in init, {observation}, {_}")
         # nodes, edges, lines, transformer = self.build_edges()
@@ -177,7 +176,7 @@ class volt_var(gym.Env):
         #    action = dis_action        
 
         ### capacitor control
-        print(f"This is the selected action: {action}")
+        # print(f"This is the selected action: {action}")
         if self.cap_num>0:
             statuses = action[action_idx:action_idx+self.cap_num] #use index to get the right action for cap
             capdiff = self.circuit.set_all_capacitor_statuses(statuses) #array of size 2
@@ -264,8 +263,45 @@ class volt_var(gym.Env):
         
         #return observation, reward, done, truncated, info
 
+    def reset_obs_space(self, wrap_observation=True, observe_load=False):
+        '''
+        reset the observation space based on the option of wrapping and load.
+        
+        instead of setting directly from the attribute (e.g., Env.wrap_observation)
+        it is suggested to set wrap_observation and observe_load through this function
+        
+        '''
+        self.wrap_observation = wrap_observation
+        self.observe_load = observe_load
+        
+        self.reset(load_profile_idx=0)
+        #self.reset()
+        #nnode = len(self.obs['bus_voltages'])
+        nnode = len(np.hstack( list(self.obs['bus_voltages'].values()) ))
+        if observe_load: nload = len(self.obs['load_profile_t'])
+        
+        if self.wrap_observation:
+            low, high = [0.8]*nnode, [1.2]*nnode  # add voltage bound
+            low, high = low+[0]*self.cap_num, high+[1]*self.cap_num # add cap bound
+            low, high = low+[0]*self.reg_num, high+[self.reg_act_num]*self.reg_num # add reg bound
+            low, high = low+[0,-1]*self.bat_num, high+[1,1]*self.bat_num # add bat bound
+            if observe_load: low, high = low+[0.0]*nload, high+[1.0]*nload # add load bound
+            low, high = np.array(low, dtype=np.float32), np.array(high, dtype=np.float32)
+            self.observation_space = gym.spaces.Box(low, high) 
+        else:
+            bat_dict = {bat: gym.spaces.Box(np.array([0,-1]), np.array([1,1]), dtype=np.float32) 
+                        for bat in self.obs['bat_statuses'].keys()}
+            obs_dict = {
+                'bus_voltages': gym.spaces.Box(0.8, 1.2, shape=(nnode,)),
+                'cap_statuses': gym.spaces.MultiDiscrete([2]*self.cap_num),
+                'reg_statuses': gym.spaces.MultiDiscrete([self.reg_act_num]*self.cap_num),
+                'bat_statuses': gym.spaces.Dict(bat_dict)
+            }
+            if observe_load: obs_dict['load_profile_t'] = gym.spaces.Box(0.0, 1.0, shape=(nload,))
+            self.observation_space = gym.spaces.Dict(obs_dict)
+
     #def reset(self, seed = None): # put seed = None so that it is compatible with openAI gymnasium env
-    def reset(self, load_profile_idx = 0): # put seed = None so that it is compatible with openAI gymnasium env
+    def reset(self, seed = None, load_profile_idx = 0): # put seed = None so that it is compatible with openAI gymnasium env
         """
         Reset state of enviroment for new episode
         
@@ -275,16 +311,18 @@ class volt_var(gym.Env):
         Returns:
             numpy array: wrapped observation
         """
+        super().reset(seed=seed)
         ###reset time
         self.t = 0
  
         ### choose load profile
         self.load_profile.choose_loadprofile(load_profile_idx)
-        # self.all_load_profiles = self.load_profile.get_loadprofile(self.profile_id)
+        #self.load_profile.choose_loadprofile(0)
         self.all_load_profiles = self.load_profile.get_loadprofile(load_profile_idx)
-        print('what is all_load_profiles: ', self.all_load_profiles)
+        # self.all_load_profiles = self.load_profile.get_loadprofile(0)
+        # print('what is all_load_profiles: ', self.all_load_profiles)
 
-        print(f"This is the profile: {load_profile_idx}")
+        #print(f"This is the profile: {load_profile_idx}")
         
         ### re-compile dss and reset batteries
         self.circuit.reset()
@@ -322,16 +360,19 @@ class volt_var(gym.Env):
         #self.obs['Y_matrix'] = self.circuit.edge_weight
 
         #print(f"observation_prior_to_wrap_in_reset: {self.obs}")
+        
+        # optional: extra info returned by env
+        info = {}
 
         if self.wrap_observation:
             #if self.obs_type == "non_graph":
             #    observation = self.flat_wrap_obs(self.obs)
             #elif self.obs_type == "graph":
             #    observation = self.graph_wrap_obs(self.obs)
-            return self.wrap_obs(self.obs)
+            return self.wrap_obs(self.obs), info
         else:
             #observation = self.obs
-            return self.obs
+            return self.obs, info
 
         #print(f"observation_after_wrap_in_reset: {observation}")
 

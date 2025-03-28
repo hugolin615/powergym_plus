@@ -4,7 +4,7 @@
 import os
 import inspect
 import re
-from env.env import volt_var
+from powergym_plus.env.env import volt_var
 
 # map from system_name to fixed information of the system
 
