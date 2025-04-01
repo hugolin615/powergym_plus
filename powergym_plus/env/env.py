@@ -178,6 +178,7 @@ class volt_var(gym.Env):
         ### capacitor control
         # print(f"This is the selected action: {action}")
         if self.cap_num>0:
+            #print(f'action: {action}, action_idx: {action_idx}, cap_num: {self.cap_num}')
             statuses = action[action_idx:action_idx+self.cap_num] #use index to get the right action for cap
             capdiff = self.circuit.set_all_capacitor_statuses(statuses) #array of size 2
             cap_statuses = {cap:status for cap, status in \
@@ -644,3 +645,8 @@ class volt_var(gym.Env):
                                     'vol_reward':v, 'ctrl_reward':t} )
             
             return summ, info
+    def get_num_profiles(self):
+        return self.num_profiles
+
+    def get_ep_len(self):
+        return self.horizon

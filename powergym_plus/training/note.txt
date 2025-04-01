@@ -1,0 +1,5 @@
+simple_ppo.py:
+    using default PPO MLP; I mainly used this file to test how to use call back function and train/evaluate across multiple load profiles
+ppo.py:
+    enhanced from simple_ppo.py; frame it in a calling framework, parameters passing and setting up for logging, following rl sb3 zoo. 
+

@@ -2,7 +2,7 @@ README.md
 setup.py
 powergym_plus/bootstrapping.py
 powergym_plus/random_agent.py
-powergym_plus/simple_ppo.py
+powergym_plus/util.py
 powergym_plus.egg-info/PKG-INFO
 powergym_plus.egg-info/SOURCES.txt
 powergym_plus.egg-info/dependency_links.txt

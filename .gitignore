@@ -4,6 +4,7 @@ archive/
 Result/
 result/
 log/
+logs/
 logexp/
 *.pyc
 backup/
