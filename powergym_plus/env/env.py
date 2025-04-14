@@ -13,11 +13,18 @@ import torch as th
 from torch_geometric.data import Data
 from gymnasium.spaces import Graph, Box, Discrete
 
+from enum import Enum, auto
 #this is our new imports
 from powergym_plus.env.action import ActionSpace
 # from env.reward import MyReward
 # from env.obs import Observation
 #### helper functions ####
+
+class Wrap_Obs(Enum):
+    NO_WRAP = auto()
+    FLAT = auto()
+    GRAPH = auto()
+ 
 
 #### environment class ####
 class volt_var(gym.Env):
@@ -83,19 +90,23 @@ class volt_var(gym.Env):
         self.observe_load = False
         """
         self.dss_folder_path = os.path.join(folder_path, info['system_name'])
-        print(f"inside_volt_var:{self.dss_folder_path}") 
+        # print(f"inside_volt_var:{self.dss_folder_path}") 
+        # print(f"inside volt_var:{info}") 
         self.dss_file = info['dss_file'] 
         self.source_bus = info['source_bus']
         self.node_size = info['node_size']
         self.shift = info['shift']
         self.show_node_labels = info['show_node_labels']
         self.scale = info['scale'] if 'scale' in info else 1.0
-        self.wrap_observation = True
-        self.observe_load = True
+        #self.wrap_observation = True
+        self.wrap_observation = info['wrap_obs']
+        #self.observe_load = True
+        self.observe_load = info['observe_load']
         #self.action_type = action_type
         #self.obs_type = obs_type
         #self.profile_id = profile_id
 
+        print(f"inside volt_var:{self.wrap_observation}, {self.observe_load}") 
         # generate load profile files
         self.load_profile = LoadProfile(\
                  info['max_episode_steps'],
@@ -129,7 +140,7 @@ class volt_var(gym.Env):
         assert self.cap_num>=0 and self.reg_num>=0 and self.bat_num>=0 and \
                self.cap_num + self.reg_num + self.bat_num>=1,'invalid CRB_num'
         
-        #self.topology = self.build_graph()
+        self.topology = self.build_graph()
         self.t = 0
 
         #self.reward_func = MyReward(volt_var, info, self.obs, self.t, self.horizon)
@@ -139,13 +150,15 @@ class volt_var(gym.Env):
         # create action space and observation space
         self.ActionSpace = ActionSpace( (self.cap_num, self.reg_num, self.bat_num),
                                         (self.reg_act_num, self.bat_act_num) )
-        print(f"self.cap_num:{self.cap_num}, self.reg_num:{self.reg_num}, self.bat_num:{self.bat_num}, self.reg_act_num: {self.reg_act_num}, self.bat_act_num:{self.bat_act_num}")
+        # print(f"self.cap_num:{self.cap_num}, self.reg_num:{self.reg_num}, self.bat_num:{self.bat_num}, self.reg_act_num: {self.reg_act_num}, self.bat_act_num:{self.bat_act_num}")
         self.action_space = self.ActionSpace.space
         
         # HL: ignore the wrap_observation at this moment, using the dict types for experiments first
         #      need to determine appropriate way of wrapping observation
         # self.reset()
-        self.reset_obs_space()
+ 
+        self.reset_obs_space(wrap_observation = self.wrap_observation, observe_load = self.observe_load)
+        #self.reset_obs_space()
         
         #print(f"This is in init, {observation}, {_}")
         # nodes, edges, lines, transformer = self.build_edges()
@@ -221,9 +234,11 @@ class volt_var(gym.Env):
  
         ### Update obs ###
         bus_voltages = dict()
+        bus_nodes = dict()
         for bus_name in self.all_bus_names:
             bus_voltages[bus_name] = self.circuit.bus_voltage(bus_name) #get bus voltage based on the actions
-            bus_voltages[bus_name] = [bus_voltages[bus_name][i] for i in range(len(bus_voltages[bus_name])) if i%2==0] #only takes even index
+            bus_voltages[bus_name] = [bus_voltages[bus_name][i] for i in range(len(bus_voltages[bus_name])) if i%2==0] #only takes even index % only take magnitudesi
+            bus_nodes[bus_name] = self.circuit.bus_node(bus_name)
         
         self.obs['bus_voltages'] = bus_voltages
         self.obs['cap_statuses'] = cap_statuses
@@ -231,6 +246,7 @@ class volt_var(gym.Env):
         self.obs['bat_statuses'] = bat_statuses
         self.obs['power_loss'] = - self.circuit.total_loss()[0]/self.circuit.total_power()[0]
         self.obs['time'] = self.t
+        self.obs['bus_nodes'] = bus_nodes
         if self.observe_load:
             self.obs['load_profile_t'] = self.all_load_profiles.iloc[self.t%self.horizon].to_dict()
 
@@ -249,13 +265,16 @@ class volt_var(gym.Env):
                       'av_soc': sum([soc for soc, _ in bat_statuses.values()])/ \
                                    (self.bat_num+1e-10)  })
         
-        #print(f"observation_prior_wrap_in_step: {self.obs}")
-        if self.wrap_observation:
+        #print(f"observation_prior_wrap_in_step: {self.wrap_observation} {self.obs}")
+        # if self.wrap_observation:
+        if self.wrap_observation == Wrap_Obs.FLAT:
             return self.wrap_obs(self.obs), reward, done, truncated, info
             #if self.obs_type == "non_graph":
             #    observation = self.flat_wrap_obs(self.obs)
             #elif self.obs_type == "graph":
             #    observation = self.graph_wrap_obs(self.obs)
+        elif self.wrap_observation == Wrap_Obs.GRAPH:
+            return self.graph_wrap_obs(self.obs), reward, done, truncated, info
         else:
             #observation = self.obs
             return self.obs, reward, done, truncated, info
@@ -264,7 +283,7 @@ class volt_var(gym.Env):
         
         #return observation, reward, done, truncated, info
 
-    def reset_obs_space(self, wrap_observation=True, observe_load=False):
+    def reset_obs_space(self, wrap_observation, observe_load):
         '''
         reset the observation space based on the option of wrapping and load.
         
@@ -281,7 +300,7 @@ class volt_var(gym.Env):
         nnode = len(np.hstack( list(self.obs['bus_voltages'].values()) ))
         if observe_load: nload = len(self.obs['load_profile_t'])
         
-        if self.wrap_observation:
+        if self.wrap_observation == Wrap_Obs.FLAT:
             low, high = [0.8]*nnode, [1.2]*nnode  # add voltage bound
             low, high = low+[0]*self.cap_num, high+[1]*self.cap_num # add cap bound
             low, high = low+[0]*self.reg_num, high+[self.reg_act_num]*self.reg_num # add reg bound
@@ -289,7 +308,15 @@ class volt_var(gym.Env):
             if observe_load: low, high = low+[0.0]*nload, high+[1.0]*nload # add load bound
             low, high = np.array(low, dtype=np.float32), np.array(high, dtype=np.float32)
             self.observation_space = gym.spaces.Box(low, high) 
-        else:
+        elif self.wrap_observation == Wrap_Obs.GRAPH:
+            # TODO: node feature dimension 3 is hardcoded here
+            num_node = len(self.topology.nodes)
+            num_edge = len(self.topology.edges)
+            self.observation_space = gym.spaces.Dict(
+                {"x": gym.spaces.Box(low = 0.8, high = 1.2, shape=(num_node, 3), dtype = np.float32),
+                "edge_index": gym.spaces.Box(low = 0, high = 10000, shape=(2, num_edge), dtype = np.int64)}
+                )
+        else: # TODO: this nested types are not supporte by SB3. Probably need to updated in the future
             bat_dict = {bat: gym.spaces.Box(np.array([0,-1]), np.array([1,1]), dtype=np.float32) 
                         for bat in self.obs['bat_statuses'].keys()}
             obs_dict = {
@@ -299,6 +326,7 @@ class volt_var(gym.Env):
                 'bat_statuses': gym.spaces.Dict(bat_dict)
             }
             if observe_load: obs_dict['load_profile_t'] = gym.spaces.Box(0.0, 1.0, shape=(nload,))
+            
             self.observation_space = gym.spaces.Dict(obs_dict)
 
     #def reset(self, seed = None): # put seed = None so that it is compatible with openAI gymnasium env
@@ -330,10 +358,14 @@ class volt_var(gym.Env):
 
         ### node voltages
         bus_voltages = dict()
+        bus_nodes = dict()
         for bus_name in self.all_bus_names:
             bus_voltages[bus_name] = self.circuit.bus_voltage(bus_name)
             bus_voltages[bus_name] = [bus_voltages[bus_name][i] for i in range(len(bus_voltages[bus_name])) if i%2==0]
+            bus_nodes[bus_name] = self.circuit.bus_node(bus_name)
         self.obs['bus_voltages'] = bus_voltages
+        self.obs['bus_nodes'] = bus_nodes
+        # print(f'reset: {type(bus_voltages[])}')
 
         ### status of capacitor
         cap_statuses = {name:cap.status for name, cap in self.circuit.capacitors.items()}
@@ -365,12 +397,17 @@ class volt_var(gym.Env):
         # optional: extra info returned by env
         info = {}
 
-        if self.wrap_observation:
+
+        # print(f"observation prior wrap in reset: {self.wrap_observation} {self.obs}")
+
+        if self.wrap_observation == Wrap_Obs.FLAT:
             #if self.obs_type == "non_graph":
             #    observation = self.flat_wrap_obs(self.obs)
             #elif self.obs_type == "graph":
             #    observation = self.graph_wrap_obs(self.obs)
             return self.wrap_obs(self.obs), info
+        elif self.wrap_observation == Wrap_Obs.GRAPH:
+            return self.graph_wrap_obs(self.obs), info
         else:
             #observation = self.obs
             return self.obs, info
@@ -477,18 +514,44 @@ class volt_var(gym.Env):
         """
         #__________________building nodes and features___________________________#
 
-        bus_voltages = list(obs['bus_voltages'].values())
+        # bus_voltages = list(obs['bus_voltages'].values())
+        local_voltages = obs['bus_voltages']
+        local_busnodes = obs['bus_nodes']
+        # print(f'graph_wrap_obs:{local_voltages}, {bus_nodes}')
+        bus_voltages = {}
+        bus_voltages_mask = {}
+        #bus_voltages = {key: [0] * 3 for key, values in obs['bus_voltages']}
+        #bus_voltages_mask = {key: [0] * 3 for key, values in obs['bus_voltages']}
         #print(f"bus_voltages: {bus_voltages}")
+        for key, values in local_voltages.items():
+            # assert isinstance(bus_voltages, list), "values are not list"
+            assert key in local_busnodes, "something wrong with bus nodes"
+            # bus_voltages[key] = [np.NaN] * 3
+            bus_voltages[key] = [0] * 3
+            bus_voltages_mask[key] = [0] * 3
+            i = 0
+            for j in local_busnodes[key]: # phase number is 1, 2, 3,
+               bus_voltages[key][j-1] = obs['bus_voltages'][key][i]
+               bus_voltages_mask[key][j-1] = 1
+               i = i + 1
 
+
+        x = np.array(list(bus_voltages.values()))
+        # print(f"HL DEBUG: {node_features}")
+        x_mask = np.array(bus_voltages_mask.values())
+        
         # Find the maximum length of the voltage sequences
-        max_length = max(len(v) for v in bus_voltages)
+        # max_length = max(len(v) for v in bus_voltages)
 
         # Pad shorter sequences with zeros to make all sequences the same length
-        padded_voltages = [v + [0.0] * (max_length - len(v)) for v in bus_voltages]
+        ## TODO: how to map load profiles 
+        #padded_voltages = [v + [0.0] * (max_length - len(v)) for v in bus_voltages]
+        #padded_voltages = [v + [np.NaN] * (max_length - len(v)) for v in bus_voltages]
         #print(f"padded:{padded_voltages}")
 
         # Convert the list of padded voltage lists to a PyTorch tensor
-        node_features = th.tensor(padded_voltages, dtype = th.float32)
+        # node_features = th.tensor(padded_voltages, dtype = th.float32)
+
         #print(f"node_features:{node_features}")
 
 
@@ -512,22 +575,22 @@ class volt_var(gym.Env):
         bus_to_index = {bus: idx for idx, bus in enumerate(all_buses)}
         #print(f"indexing: {bus_to_index}")
 
-        topology, edges, lines, transformer = self.build_edges()
+        # topology, edges, lines, transformer = self.build_edges()
 
         #create mapping
         edge = []
-        for (bus1, bus2) in edges:
+        for (bus1, bus2) in self.topology.edges:
             # print(f"bus 1: {bus1}, bus 2: {bus2}")
             # print(f"index_1: {bus_to_index[bus1]}, index_2: {bus_to_index[bus2]}")
             edge.append((bus_to_index[bus1], bus_to_index[bus2]))
         #print(f"mapping: {edge}")
 
         #edge_index = th.tensor(edge, dtype=th.long).t().contiguous()
+        edge_index = np.transpose(np.array(edge))
         #print(f"edge converted: {edge_index}")
 
 
-        edge_index = th.tensor(edge, dtype=th.long).t()
-
+        # edge_index = th.tensor(edge, dtype=th.long).t()
 
         #__________________stuff_I_added___________________________#
         # # Pad edge index if necessary
@@ -540,12 +603,15 @@ class volt_var(gym.Env):
         #     edge_index = th.tensor(padded_edge_index, dtype=th.long)
 
         #convert into PyG data
-        data = Data(x=node_features, edge_index=edge_index)
+        ## data = Data(x=node_features, edge_index=edge_index)
         #print(f"Data: {data}")
 
-        edge_index = self._process_edge_index(edge_index)
+        # edge_index = self._process_edge_index(edge_index)
 
-        observation = {"node_features": node_features, "edge_index" : edge_index}
+        # print(f"\n\n observation: node_features: {node_features.shape}, edge_index: {edge_index.shape}\n\n")
+
+        observation = {"x": x, "edge_index": edge_index}
+        #print(f'inside graph_wrap_obs: {observation}')
 
         # print("Node features shape:", node_features.shape)
         # print("Node features dtype:", node_features)
@@ -650,3 +716,166 @@ class volt_var(gym.Env):
 
     def get_ep_len(self):
         return self.horizon
+
+    def build_graph(self):
+        """Constructs a NetworkX graph for downstream use
+        
+        Returns:
+            Graph: Network graph
+        """
+        self.lines = dict()
+        self.circuit.dss.ActiveCircuit.Lines.First
+        while(True):
+            bus1 = self.circuit.dss.ActiveCircuit.Lines.Bus1.split('.', 1)[0].lower()
+            bus2 = self.circuit.dss.ActiveCircuit.Lines.Bus2.split('.', 1)[0].lower()
+            line_name = self.circuit.dss.ActiveCircuit.Lines.Name.lower()
+            self.lines[line_name] = (bus1, bus2)
+            if self.circuit.dss.ActiveCircuit.Lines.Next==0:
+                break
+
+        transformer_names = self.circuit.dss.ActiveCircuit.Transformers.AllNames
+        self.transformers = dict()
+        for transformer_name in transformer_names:
+            self.circuit.dss.ActiveCircuit.SetActiveElement('Transformer.' + transformer_name)
+            buses = self.circuit.dss.ActiveCircuit.ActiveElement.BusNames
+            #assert len(buses) == 2, 'Transformer {} has more than two terminals'.format(transformer_name)
+            bus1 = buses[0].split('.', 1)[0].lower()
+            bus2 = buses[1].split('.', 1)[0].lower()
+            self.transformers[transformer_name] = (bus1, bus2)
+
+        self.edges = [frozenset(edge) for _, edge in self.transformers.items()] + [frozenset(edge) for _, edge in self.lines.items()]
+        if len(self.edges) != len(set(self.edges)):
+            print('There are ' + str(len(self.edges)) + ' edges and ' + str(len(set(self.edges))) + ' unique edges. Overlapping transformer edges')
+
+        self.circuit.topology.add_edges_from(self.edges)
+        # print(len(self.circuit.topology.nodes))
+        # print(self.circuit.topology.nodes)
+        # print(len(self.circuit.topology.edges))
+        # print(self.circuit.topology.edges)
+
+        # self.adj_mat = nx.adjacency_matrix(self.circuit.topology)
+        # print(self.adj_mat.todense())
+        return self.circuit.topology
+
+    def plot_graph(self, node_bound='minimum', 
+                   vmin=0.95, vmax=1.05, 
+                   cmap='jet', figsize=(18,12), 
+                   text_loc_x=0, text_loc_y=400,
+                   node_size=None, shift=None,
+                   show_node_labels=None,
+                   show_voltages=True,
+                   show_controllers=True,
+                   show_actions=False):
+        """Function to plot system graph with voltage as node intensity
+        
+        Args:
+            node_bound (str): Determine to plot max/min node voltage for nodes with more than one phase
+            vmin (float): Min heatmap intensity
+            vmax (float): Max heatmap intensity
+            cmap (str): Colormap
+            figsize (tuple): Figure size
+            text_loc_x (int): x-coordinate for timestamp
+            text_loc_y (int): y-coordinate for timestamp
+            node_size (int): Node size. If None, initialize with environment setting
+            shift (int): shift of node label. If None, initialize with environment setting
+            show_node_labels (bool): show node label. If None, initialize with environment setting
+            show_voltages (bool): show voltages
+            show_controllers (bool): show controllers
+            show_actions (bool): show actions
+        
+        Returns:
+            fig: Matplotlib figure
+            pos: dictionary of node positions
+            
+        """
+        node_size = self.node_size if node_size is None else node_size
+        shift = self.shift if shift is None else shift
+        show_node_labels = self.show_node_labels if show_node_labels is None else show_node_labels
+        
+        #get normalized node voltages
+        voltages, nodes = [], []
+        pos = dict()
+
+        assert node_bound in ['maximum', 'minimum'], 'invalid node_bound'
+        for busname in self.all_bus_names:
+            self.circuit.dss.Circuits.SetActiveBus(busname)
+            if not self.circuit.dss.Circuits.Buses.Coorddefined: continue
+            x = self.circuit.dss.Circuits.Buses.x
+            y = self.circuit.dss.Circuits.Buses.y
+
+            pos[busname] = (x,y)
+            nodes.append(busname)
+            bus_volts = [self.circuit.dss.Circuits.Buses.puVmagAngle[i] for i in range(len(self.circuit.dss.Circuits.Buses.puVmagAngle)) if i%2==0]
+            if node_bound == 'minimum':
+                voltages.append(min(bus_volts))
+            elif node_bound == 'maximum':
+                voltages.append(max(bus_volts))
+
+        fig = plt.figure(figsize=figsize)
+        graph = nx.Graph()
+
+        # local lines, transformers and edges
+        HasLocation = lambda p: (p[0] in pos and p[1] in pos)
+        loc_lines = [pair for pair in self.lines.values() if HasLocation(pair)]
+        loc_trans = [pair for pair in self.transformers.values() if HasLocation(pair)]
+
+        graph.add_edges_from(loc_lines + loc_trans)
+        nx.draw_networkx_edges(graph, pos, loc_lines, edge_color='k', width=3, label='lines')
+        nx.draw_networkx_edges(graph, pos, loc_trans, edge_color='r', width=3, label='transformers')
+        if show_voltages:
+            nx.draw_networkx_nodes(graph, pos, nodelist=nodes, node_color=voltages, vmin=vmin, vmax=vmax, cmap=cmap, node_size=node_size)
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+            sm.set_array([])
+            cbar = plt.colorbar(sm)
+        else:
+            nx.draw_networkx_nodes(graph, pos, nodelist=nodes, node_color=np.ones(len(voltages)), vmin=vmin, vmax=vmax, cmap=cmap, node_size=node_size)
+
+        if show_node_labels:
+            node_labels = {node:node for node in pos}
+            nx.draw_networkx_labels(graph, pos, labels= node_labels, font_size=15)
+
+        # show source bus
+        loc={self.source_bus:(pos[self.source_bus][0]+shift, pos[self.source_bus][1]-shift)}
+        nx.draw_networkx_labels(graph, loc, labels={self.source_bus:'src'}, font_size=15)
+
+        if show_controllers:
+            if self.cap_num>0:
+                labels = {self.circuit.capacitors[cap].bus1:'cap' for cap in self.cap_names}
+                labels = {k:v for k,v in labels.items() if k in pos } # remove missing pos
+                loc = {bus:(pos[bus][0]+shift,pos[bus][1]+shift) for bus in labels.keys()}
+                nx.draw_networkx_labels(graph, loc, labels=labels, font_size=15, 
+                                        font_color='darkorange')
+            if self.bat_num>0:
+                labels = {self.circuit.batteries[bat].bus1:'bat' for bat in self.bat_names}
+                labels = {k:v for k,v in labels.items() if k in pos } # remove missing pos
+                loc = {bus:(pos[bus][0]+shift,pos[bus][1]+shift) for bus in labels.keys()}
+                nx.draw_networkx_labels(graph, loc, labels=labels, font_size=15, 
+                                        font_color='darkviolet')
+            if self.reg_num>0:
+                regs = self.circuit.regulators
+                labels = {(regs[r].bus1, regs[r].bus2):'reg' for r in self.reg_names}
+                # accept if one of the edge's node is in pos
+                labels = {k:v for k,v in labels.items() if (k[0] in pos or k[1] in pos) }
+                
+                loc = dict()
+                for key in labels.keys():
+                    b1, b2 = key
+                    lx, ly, count = 0.0, 0.0, 0
+                    for b in list(key):
+                        if b in pos:
+                            ll = pos[b]
+                            lx, ly, count = lx+ll[0], ly+ll[1], count+1
+                    lx, ly = lx/count, ly/count
+                    loc[key] = (lx + shift, ly + shift)
+                nx.draw_networkx_labels(graph, loc, labels=labels, font_size=15, 
+                                        font_color='darkred')
+
+
+        
+        if show_actions:
+            plt.text(text_loc_x, text_loc_y, s='t='+str(self.t)+' Action: '+ self.str_action, 
+                     fontsize=18)
+        elif show_voltages:
+            plt.text(text_loc_x, text_loc_y, s='t='+str(self.t), fontsize=18)
+
+        return fig, pos

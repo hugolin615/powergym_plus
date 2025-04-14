@@ -9,7 +9,6 @@ import yaml
 
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -17,6 +16,11 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from powergym_plus.env.env_register import make_env
 from powergym_plus.util.util import get_latest_run_id
 from powergym_plus.util.util import ALGOS
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.ppo import MlpPolicy
+# from powergym_plus.util.sb3_policy import CustomActorCriticPolicy
+#print(dir(module))
+# from powergym_plus.util.sb3_callback import ResetEachEpisodeAndEvaluCallback
 
 # env_name = '13Bus'
 #seed_val = 1
@@ -39,73 +43,6 @@ def parse_arguments():
     parser.add_argument('--ppo_batch_size', default = 24, type = int, help = 'Batch size used for PPO policy')
     args = parser.parse_args()
     return args
-
-# this evaluation can be deleted later
-def evaluate(model, num_episodes=100, eval_range = range(0,1), deterministic=True):
-    """
-    Evaluate a RL agent
-    :param model: (BaseRLModel object) the RL Agent
-    :param num_episodes: (int) number of episodes to evaluate it
-    :return: (float) Mean reward for the last num_episodes
-    """
-    # This function will only work for a single Environment
-    vec_env = model.get_env()
-    all_episode_rewards = []
-
-    for i in range(num_episodes):
-        print(f'-------- episode: {i} -----------')
-        episode_rewards = []
-        done = False
-        #obs = vec_env.reset(load_profile_idx = eval_profile_idx)
-        eval_profile_idx = eval_range.start + i % len(eval_range)
-        obs, info = vec_env.envs[0].reset(load_profile_idx = eval_profile_idx)
-        while not done:
-            # _states are only useful when using LSTM policies
-            action, _states = model.predict(obs, deterministic=deterministic)
-            # here, action, rewards and dones are arrays
-            # because we are using vectorized env
-            # also note that the step only returns a 4-tuple, as the env that is returned
-            # by model.get_env() is an sb3 vecenv that wraps the >v0.26 API
-            # obs, reward, done, info = vec_env.step(action)
-            obs, reward, done, truncated, info = vec_env.envs[0].step(action)
-            # print(f'action: {action}, obs: {obs}, reward: {reward}')
-            episode_rewards.append(reward)
-        #print(f'episode_rewards: {episode_rewards}, {sum(episode_rewards)}')
-        all_episode_rewards.append(sum(episode_rewards))
-
-    mean_episode_reward = np.mean(all_episode_rewards)
-    std_reward = np.std(all_episode_rewards)
-    print("Mean reward:", mean_episode_reward, "standard deviation:", std_reward ,"Num episodes:", num_episodes)
-
-    return mean_episode_reward, std_reward
-
-def save_args_to_yaml(args, output_path='saved_config.yml'):
-    with open(output_path, 'w') as f:
-        yaml.dump(vars(args), f)
-
-def save_command_line(filename="run_command.txt"):
-    with open(filename, 'w') as f:
-        f.write("# Command used to run the script\n")
-        f.write(" ".join(sys.argv) + "\n")
-        f.write(f"# Timestamp: {datetime.now().isoformat()}\n")
-
-'''
-def save_policy_hyperparams(model, filename="ppo_saved_config.yml"):
-    # Extract initialization parameters
-    # hyperparams = model.get_parameters()
-    
-    # Only top-level (constructor) parameters
-    # init_params = model.get_parameters()["policy_kwargs"]
-    
-    # You can also get all config via model.get_env() and model.policy if needed
-    
-    # Alternatively, use the private `_init_kwargs` which holds all init kwargs
-    full_hyperparams = model.__dict__.get("_init_kwargs", {})
-
-    # Save to YAML
-    with open(filename, 'w') as f:
-        yaml.dump(full_hyperparams, f)
-'''
 
 class ResetEachEpisodeAndEvalCallback(BaseCallback):
     def __init__(self, 
@@ -200,6 +137,7 @@ class ResetEachEpisodeAndEvalCallback(BaseCallback):
     def _on_training_end(self):
         self.log_file.close()
 
+
 def train(args):
 
     random.seed(args.seed)
@@ -228,7 +166,7 @@ def train(args):
 
     # Initialize PPO agent
     model = ALGOS[args.algo](
-        policy = "MlpPolicy",
+        policy = MlpPolicy,
         env = vec_env,
         n_steps = 5 * ep_len,
         batch_size = ep_len,
@@ -258,7 +196,77 @@ def train(args):
     #mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=100)
     #print(f'mean_reward: {mean_reward}, std_reward: {std_reward}')
 
+# this evaluation can be deleted later
+def evaluate(model, num_episodes=100, eval_range = range(0,1), deterministic=True):
+    """
+    Evaluate a RL agent
+    :param model: (BaseRLModel object) the RL Agent
+    :param num_episodes: (int) number of episodes to evaluate it
+    :return: (float) Mean reward for the last num_episodes
+    """
+    # This function will only work for a single Environment
+    vec_env = model.get_env()
+    all_episode_rewards = []
+
+    for i in range(num_episodes):
+        print(f'-------- episode: {i} -----------')
+        episode_rewards = []
+        done = False
+        #obs = vec_env.reset(load_profile_idx = eval_profile_idx)
+        eval_profile_idx = eval_range.start + i % len(eval_range)
+        obs, info = vec_env.envs[0].reset(load_profile_idx = eval_profile_idx)
+        while not done:
+            # _states are only useful when using LSTM policies
+            action, _states = model.predict(obs, deterministic=deterministic)
+            # here, action, rewards and dones are arrays
+            # because we are using vectorized env
+            # also note that the step only returns a 4-tuple, as the env that is returned
+            # by model.get_env() is an sb3 vecenv that wraps the >v0.26 API
+            # obs, reward, done, info = vec_env.step(action)
+            obs, reward, done, truncated, info = vec_env.envs[0].step(action)
+            # print(f'action: {action}, obs: {obs}, reward: {reward}')
+            episode_rewards.append(reward)
+        #print(f'episode_rewards: {episode_rewards}, {sum(episode_rewards)}')
+        all_episode_rewards.append(sum(episode_rewards))
+
+    mean_episode_reward = np.mean(all_episode_rewards)
+    std_reward = np.std(all_episode_rewards)
+    print("Mean reward:", mean_episode_reward, "standard deviation:", std_reward ,"Num episodes:", num_episodes)
+
+    return mean_episode_reward, std_reward
+
+def save_args_to_yaml(args, output_path='saved_config.yml'):
+    with open(output_path, 'w') as f:
+        yaml.dump(vars(args), f)
+
+def save_command_line(filename="run_command.txt"):
+    with open(filename, 'w') as f:
+        f.write("# Command used to run the script\n")
+        f.write(" ".join(sys.argv) + "\n")
+        f.write(f"# Timestamp: {datetime.now().isoformat()}\n")
+
+'''
+def save_policy_hyperparams(model, filename="ppo_saved_config.yml"):
+    # Extract initialization parameters
+    # hyperparams = model.get_parameters()
+    
+    # Only top-level (constructor) parameters
+    # init_params = model.get_parameters()["policy_kwargs"]
+    
+    # You can also get all config via model.get_env() and model.policy if needed
+    
+    # Alternatively, use the private `_init_kwargs` which holds all init kwargs
+    full_hyperparams = model.__dict__.get("_init_kwargs", {})
+
+    # Save to YAML
+    with open(filename, 'w') as f:
+        yaml.dump(full_hyperparams, f)
+'''
+
+
 if __name__ == "__main__":
     args = parse_arguments()
     print(f"{args}")
     train(args)
+
+

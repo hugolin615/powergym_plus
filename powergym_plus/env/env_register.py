@@ -4,7 +4,10 @@
 import os
 import inspect
 import re
-from powergym_plus.env.env import volt_var
+from powergym_plus.env.env import volt_var, Wrap_Obs
+
+
+   
 
 # map from system_name to fixed information of the system
 
@@ -295,8 +298,24 @@ def get_info_and_folder(env_name):
     return base_info, folder_path
 
 # def make_env(env_name, profile_id, action_type, obs_type, dss_act=False, worker_idx=None):
-def make_env(env_name, dss_act=False, worker_idx=None):
+# adding user_info into make_env to including the following information as dict
+#   wrap_obs: (changed to enum type) to list how to wrap observation
+#   observe_load: (unchanged) whether to include (next) load profiles into observation
+def make_env(env_name, dss_act=False, worker_idx=None, user_info = None):
+
+   
     base_info, folder_path = get_info_and_folder(env_name)
+
+
+    print(f'make_env {user_info}')
+    # added by powergym_plus
+    if user_info is None:
+        user_info = {'wrap_obs': Wrap_Obs.FLAT, 'observe_load': True}
+
+    base_info['wrap_obs'] = user_info['wrap_obs']
+    base_info['observe_load'] = user_info['observe_load']
+
+    print(f'make_env {base_info}')
 
     if worker_idx is None:
         return volt_var(folder_path, base_info, dss_act)

@@ -3,11 +3,21 @@ import os
 import glob
 
 from stable_baselines3.common.base_class import BaseAlgorithm
+from stable_baselines3.common.policies import BasePolicy, MultiInputActorCriticPolicy
 from stable_baselines3 import A2C, DDPG, DQN, PPO, SAC, TD3
-
+from stable_baselines3.ppo import MlpPolicy
+from powergym_plus.util.sb3_policy import MyActorCriticPolicy
+from powergym_plus.util.sb3_policy import ActorCriticGnnPolicy
 
 ALGOS: dict[str, type[BaseAlgorithm]] = {
     "ppo": PPO,
+}
+
+POLICY: dict[str, type[BasePolicy]] = {
+    "mlp": MlpPolicy,
+    "custom": MyActorCriticPolicy,
+    "multi": MultiInputActorCriticPolicy,
+    "graph": ActorCriticGnnPolicy,
 }
 
 def get_latest_run_id(log_path: str, env_name: str) -> int:

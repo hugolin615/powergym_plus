@@ -602,6 +602,12 @@ class Circuits():
             per-unit voltages and angles
         '''
         return self.dss.ActiveCircuit.Buses(bus_name).puVmagAngle
+    
+    def bus_node(self, bus_name):
+        '''
+        Get bus nodes so that I know which phases has voltage
+        '''
+        return self.dss.ActiveCircuit.Buses(bus_name).Nodes
 
     def edge_current(self, edge_obj_name):
         '''
